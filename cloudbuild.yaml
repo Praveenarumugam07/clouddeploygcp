@@ -1,56 +1,62 @@
 steps:
-  # Step 1: Build Docker image
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      [
-        'build',
-        '-t', 'asia-south1-docker.pkg.dev/mythic-beanbag-463309-e9/my-repo/app:${_BUILD_ID}',
-        '.'
-      ]
+# Step 1: Docker build and push
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+    [
+      'build',
+      '-t', 'asia-south1-docker.pkg.dev/mythic-beanbag-463309-e9/my-repo/app:${_BUILD_ID}',
+      '.'
+    ]
+  id: Docker Build
 
-  # Step 2: Push image to Artifact Registry
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      [
-        'push',
-        'asia-south1-docker.pkg.dev/mythic-beanbag-463309-e9/my-repo/app:${_BUILD_ID}'
-      ]
+- name: 'gcr.io/cloud-builders/docker'
+  args:
+    [
+      'push',
+      'asia-south1-docker.pkg.dev/mythic-beanbag-463309-e9/my-repo/app:${_BUILD_ID}'
+    ]
+  id: Docker Push
 
-  # Step 3: Apply Cloud Deploy resources
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-    entrypoint: 'gcloud'
-    args:
-      [
-        "deploy", "apply",
-        "--file=clouddeploy.yaml",
-        "--region=${_REGION}",
-        "--project=mythic-beanbag-463309-e9"
-      ]
+# Step 2: Apply Cloud Deploy configuration
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  entrypoint: 'gcloud'
+  args:
+    [
+      "deploy", "apply",
+      "--file=clouddeploy.yaml",
+      "--region=${_REGION}",
+      "--project=mythic-beanbag-463309-e9"
+    ]
+  id: Apply Deploy Config
 
-  # Step 4: Wait for propagation
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-    entrypoint: 'bash'
-    args: ['-c', 'echo "Waiting for Cloud Deploy resources to propagate..."; sleep 60']
+# Step 2.5: Wait for pipeline setup
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  entrypoint: 'bash'
+  args:
+    - -c
+    - |
+      echo "Waiting for Cloud Deploy resources to become available..."
+      sleep 30
+  id: Wait
 
-  # Step 5: Create release and trigger rollout
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
-    entrypoint: 'gcloud'
-    args:
-      [
-        'deploy', 'releases', 'create', '${_BUILD_ID}',
-        '--delivery-pipeline', 'cloudrun-canary-pipeline',
-        '--region', '${_REGION}',
-        '--images', 'app=asia-south1-docker.pkg.dev/mythic-beanbag-463309-e9/my-repo/app:${_BUILD_ID}',
-        '--annotations=clouddeploy.googleapis.com/release-type=image',
-        '--project=mythic-beanbag-463309-e9'
-      ]
-
-substitutions:
-  _REGION: asia-south1
-  _BUILD_ID: rel-20240624-003
+# Step 3: Create release and deploy
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:slim'
+  entrypoint: 'gcloud'
+  args:
+    [
+      'deploy', 'releases', 'create', '${_BUILD_ID}',
+      '--delivery-pipeline', 'cloudrun-app-pipeline',
+      '--region', '${_REGION}',
+      '--images', 'app=asia-south1-docker.pkg.dev/mythic-beanbag-463309-e9/my-repo/app:${_BUILD_ID}',
+      '--project=mythic-beanbag-463309-e9'
+    ]
+  id: Create Release
 
 options:
   logging: CLOUD_LOGGING_ONLY
 
-serviceAccount: 956387703564-compute@developer.gserviceaccount.com
+substitutions:
+  _REGION: asia-south1
+  _BUILD_ID: rel-20250625-001
 
+serviceAccount: 880653953247-compute@developer.gserviceaccount.com
